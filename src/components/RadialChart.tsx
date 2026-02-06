@@ -40,7 +40,7 @@ export const RadialChart: React.FC = () => {
                         stroke="#ffffff40"
                         fontSize={10}
                         tick={{ fill: '#ffffff60' }}
-                        label={{ value: 'Radius (a₀)', position: 'insideBottomRight', offset: -10, fill: '#ffffff40', fontSize: 10 }}
+                        label={{ value: 'Radius (a₀)', position: 'insideBottomRight', offset: 0, fill: '#ffffff40', fontSize: 10 }}
                     />
                     <YAxis hide />
                     <Tooltip

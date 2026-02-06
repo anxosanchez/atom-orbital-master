@@ -3,11 +3,29 @@ import { useOrbitalStore } from '../store/useOrbitalStore';
 import { Settings, Activity, Camera } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
-    const { n, l, m, mode, opacity, setN, setL, setM, setMode, setOpacity } = useOrbitalStore();
+    const { n, l, m, visualizationMode, opacity, setN, setL, setM, setVisualizationMode, setOpacity } = useOrbitalStore();
 
-    const getSpectroscopic = (n: number, l: number) => {
+    const getFullOrbitalName = (n: number, l: number, m: number) => {
         const subshells = ['s', 'p', 'd', 'f', 'g'];
-        return `${n}${subshells[l] || '?'}`;
+        const subshell = subshells[l] || '?';
+
+        // Detailed m-subscript mappings for p and d
+        let subscript = '';
+        if (l === 1) { // p orbitals
+            if (m === 0) subscript = 'z';
+            else if (m === 1) subscript = 'x';
+            else if (m === -1) subscript = 'y';
+        } else if (l === 2) { // d orbitals
+            if (m === 0) subscript = 'z²';
+            else if (m === 1) subscript = 'xz';
+            else if (m === -1) subscript = 'yz';
+            else if (m === 2) subscript = 'x²-y²';
+            else if (m === -2) subscript = 'xy';
+        } else if (m !== 0) {
+            subscript = m > 0 ? `+${m}` : `${m}`;
+        }
+
+        return `Orbital ${n}${subshell}${subscript ? `<sub>${subscript}</sub>` : ''}`;
     };
 
     return (
@@ -26,7 +44,10 @@ export const Sidebar: React.FC = () => {
                 <div>
                     <div className="flex justify-between items-end mb-4">
                         <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Quantum Numbers</h2>
-                        <span className="text-2xl font-mono text-blue-400 font-bold">{getSpectroscopic(n, l)}</span>
+                        <span
+                            className="text-xl font-mono text-blue-400 font-bold"
+                            dangerouslySetInnerHTML={{ __html: getFullOrbitalName(n, l, m) }}
+                        />
                     </div>
 
                     <div className="space-y-4">
@@ -72,14 +93,14 @@ export const Sidebar: React.FC = () => {
                     <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">Visualization</h2>
                     <div className="grid grid-cols-2 gap-2">
                         <button
-                            onClick={() => setMode('cloud')}
-                            className={`py-2 px-3 rounded-lg text-xs font-medium transition-all ${mode === 'cloud' ? 'bg-white/20 text-white border border-white/20' : 'bg-white/5 text-white/40 border border-transparent hover:bg-white/10'}`}
+                            onClick={() => setVisualizationMode('cloud')}
+                            className={`py-2 px-3 rounded-lg text-xs font-medium transition-all ${visualizationMode === 'cloud' ? 'bg-white/20 text-white border border-white/20' : 'bg-white/5 text-white/40 border border-transparent hover:bg-white/10'}`}
                         >
                             Density Cloud
                         </button>
                         <button
-                            onClick={() => setMode('surface')}
-                            className={`py-2 px-3 rounded-lg text-xs font-medium transition-all ${mode === 'surface' ? 'bg-white/20 text-white border border-white/20' : 'bg-white/5 text-white/40 border border-transparent hover:bg-white/10'}`}
+                            onClick={() => setVisualizationMode('surface')}
+                            className={`py-2 px-3 rounded-lg text-xs font-medium transition-all ${visualizationMode === 'surface' ? 'bg-white/20 text-white border border-white/20' : 'bg-white/5 text-white/40 border border-transparent hover:bg-white/10'}`}
                         >
                             Isosurface
                         </button>

@@ -71,19 +71,20 @@ const fragmentShader = `
             vec3 phaseColor = mix(vec3(0.95, 0.3, 0.7), vec3(0.2, 0.6, 1.0), phase);
 
             if (uMode == 0) {
-                // Cloud Mode
-                alpha = density * uOpacity * stepSize * 2.0; // Scaled by boost
+                // Cloud Mode: Volumetric additive blending
+                alpha = density * uOpacity * stepSize * 2.0;
                 float weight = (1.0 - color.a) * alpha;
                 color.rgb += weight * phaseColor;
                 color.a += weight;
             } else if (density > uThreshold) {
-                // Isosurface Mode: Basic shading
+                // Isosurface Mode: Solid shell with shading
                 vec3 nextP = vOrigin + rayDir * (t - stepSize);
                 float nextD = texture(uTexture, nextP + 0.5).r * uDensityBoost;
                 float diff = density - nextD;
                 
-                float shading = clamp(0.3 + 0.7 * abs(diff * 20.0), 0.4, 1.0);
-                color = vec4(phaseColor * shading, uOpacity);
+                // Stronger shading for "solid" look
+                float shading = clamp(0.2 + 0.8 * abs(diff * 50.0), 0.3, 1.0);
+                color = vec4(phaseColor * shading, 1.0); // Full opacity for the shell
                 break; 
             }
         }
@@ -104,27 +105,30 @@ export const OrbitalVolume: React.FC = () => {
     const texture = useMemo(() => {
         const size = quality;
         const data = new Float32Array(size * size * size * 4); // RGBA
-        const range = 14; // Bohr units
+
+        // Dynamic range based on n: r_max ≈ n^2 + 10 or n*12 + 5.
+        // For n=3, 41. For n=5, 65.
+        const range = n * 12 + 5;
 
         for (let z = 0; z < size; z++) {
             for (let y = 0; y < size; y++) {
                 for (let x = 0; x < size; x++) {
                     const i = (z * size * size + y * size + x) * 4;
 
-                    // Map grid index to physics space
-                    const px = ((x / size) - 0.5) * 2 * range;
-                    const py = ((y / size) - 0.5) * 2 * range;
-                    const pz = ((z / size) - 0.5) * 2 * range;
+                    // Map grid index to physics space [-0.5, 0.5] -> [-range, range]
+                    const px = ((x / (size - 1)) - 0.5) * 2 * range;
+                    const py = ((y / (size - 1)) - 0.5) * 2 * range;
+                    const pz = ((z / (size - 1)) - 0.5) * 2 * range;
 
                     const r = Math.sqrt(px * px + py * py + pz * pz);
-                    const theta = Math.acos(pz / (r + 0.00001));
+                    const theta = Math.acos(Math.max(-1, Math.min(1, pz / (r + 0.00001))));
                     const phi = Math.atan2(py, px);
 
                     const psi = waveFunction(n, l, m, r, theta, phi);
                     const dens = psi.real * psi.real + psi.imag * psi.imag;
 
-                    data[i] = dens * 40.0; // Balanced boost
-                    data[i + 1] = psi.real >= 0 ? 1 : 0; // Simple phase mapping for G channel
+                    data[i] = dens;
+                    data[i + 1] = psi.real >= 0 ? 1.0 : 0.0; // Phase
                     data[i + 2] = 0;
                     data[i + 3] = 1;
                 }
@@ -142,17 +146,15 @@ export const OrbitalVolume: React.FC = () => {
     }, [n, l, m, quality]);
 
     const uniforms = useMemo(() => {
-        // Higher n means density is spread over much larger volume.
-        // We need a massive boost for higher n to keep it visible.
-        // 1s peak is ~0.3, 3d peak is ~0.00015. Ratio is ~2000.
-        // Roughly n^6 or n^8 scaling helps.
-        const boost = Math.pow(n, 6) * 50.0;
+        // High range boost: when range is larger, density is sampled in more sparse voxels.
+        // We'll normalize density by n^6 but also account for the volume.
+        const boost = Math.pow(n, 6) * 1000.0;
 
         return {
             uTexture: { value: texture },
             uOpacity: { value: opacity },
             uSteps: { value: quality * 2 },
-            uThreshold: { value: 0.02 }, // Lowered threshold for isosurface
+            uThreshold: { value: 0.015 / Math.pow(n, 2) }, // Dynamic threshold for isosurface
             uMode: { value: visualizationMode === 'cloud' ? 0 : 1 },
             uDensityBoost: { value: boost }
         };
@@ -163,12 +165,13 @@ export const OrbitalVolume: React.FC = () => {
             const mat = meshRef.current.material as THREE.ShaderMaterial;
             mat.uniforms.uOpacity.value = opacity;
             mat.uniforms.uMode.value = visualizationMode === 'cloud' ? 0 : 1;
-            mat.uniforms.uDensityBoost.value = Math.pow(n, 6) * 50.0;
+            mat.uniforms.uDensityBoost.value = Math.pow(n, 6) * 1000.0;
+            mat.uniforms.uThreshold.value = 0.015 / Math.pow(n, 2);
         }
     }, [opacity, visualizationMode, n]);
 
     return (
-        <mesh ref={meshRef} scale={[10, 10, 10]}>
+        <mesh ref={meshRef} scale={[12, 12, 12]}>
             <boxGeometry args={[1, 1, 1]} />
             <shaderMaterial
                 vertexShader={vertexShader}

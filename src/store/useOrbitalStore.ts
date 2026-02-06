@@ -6,12 +6,12 @@ interface OrbitalState {
     m: number;
     quality: number; // For rendering
     opacity: number;
-    mode: 'cloud' | 'surface';
+    visualizationMode: 'cloud' | 'surface';
     colorMode: 'phase' | 'density';
     setN: (n: number) => void;
     setL: (l: number) => void;
     setM: (m: number) => void;
-    setMode: (mode: 'cloud' | 'surface') => void;
+    setVisualizationMode: (mode: 'cloud' | 'surface') => void;
     setColorMode: (mode: 'phase' | 'density') => void;
     setOpacity: (opacity: number) => void;
     setQuality: (quality: number) => void;
@@ -23,7 +23,7 @@ export const useOrbitalStore = create<OrbitalState>((set) => ({
     m: 0,
     quality: 64,
     opacity: 0.5,
-    mode: 'cloud',
+    visualizationMode: 'cloud',
     colorMode: 'phase',
     setN: (n) => set((state) => {
         const newN = Math.max(1, n);
@@ -40,7 +40,7 @@ export const useOrbitalStore = create<OrbitalState>((set) => ({
         const newM = Math.max(-state.l, Math.min(state.l, m));
         return { m: newM };
     }),
-    setMode: (mode) => set({ mode }),
+    setVisualizationMode: (visualizationMode) => set({ visualizationMode }),
     setColorMode: (colorMode) => set({ colorMode }),
     setOpacity: (opacity) => set({ opacity }),
     setQuality: (quality) => set({ quality }),

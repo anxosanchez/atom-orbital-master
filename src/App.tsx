@@ -1,7 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Sidebar } from './components/Sidebar';
-import { useOrbitalStore } from './store/useOrbitalStore';
 import { OrbitalVolume } from './components/OrbitalVolume';
 import { RadialChart } from './components/RadialChart';
 
