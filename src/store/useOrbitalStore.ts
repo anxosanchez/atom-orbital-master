@@ -4,13 +4,19 @@ interface OrbitalState {
     n: number;
     l: number;
     m: number;
-    quality: number; // For rendering
+    orbitalType: 'complex' | 'real' | 'hybrid';
+    hybridType: 'sp' | 'sp2' | 'sp3';
+    hybridIndex: number;
+    quality: number;
     opacity: number;
     visualizationMode: 'cloud' | 'surface';
     colorMode: 'phase' | 'density';
     setN: (n: number) => void;
     setL: (l: number) => void;
     setM: (m: number) => void;
+    setOrbitalType: (type: 'complex' | 'real' | 'hybrid') => void;
+    setHybridType: (type: 'sp' | 'sp2' | 'sp3') => void;
+    setHybridIndex: (index: number) => void;
     setVisualizationMode: (mode: 'cloud' | 'surface') => void;
     setColorMode: (mode: 'phase' | 'density') => void;
     setOpacity: (opacity: number) => void;
@@ -21,6 +27,9 @@ export const useOrbitalStore = create<OrbitalState>((set) => ({
     n: 3,
     l: 2,
     m: 0,
+    orbitalType: 'complex',
+    hybridType: 'sp3',
+    hybridIndex: 0,
     quality: 64,
     opacity: 0.5,
     visualizationMode: 'cloud',
@@ -40,6 +49,9 @@ export const useOrbitalStore = create<OrbitalState>((set) => ({
         const newM = Math.max(-state.l, Math.min(state.l, m));
         return { m: newM };
     }),
+    setOrbitalType: (orbitalType) => set({ orbitalType }),
+    setHybridType: (hybridType) => set({ hybridType, hybridIndex: 0 }),
+    setHybridIndex: (hybridIndex) => set({ hybridIndex }),
     setVisualizationMode: (visualizationMode) => set({ visualizationMode }),
     setColorMode: (colorMode) => set({ colorMode }),
     setOpacity: (opacity) => set({ opacity }),

@@ -4,20 +4,22 @@ import { radialWaveFunction } from '../math/physics';
 import { useOrbitalStore } from '../store/useOrbitalStore';
 
 export const RadialChart: React.FC = () => {
-    const { n, l } = useOrbitalStore();
+    const n = useOrbitalStore(s => s.n);
+    const l = useOrbitalStore(s => s.l);
 
     const data = useMemo(() => {
         const points = [];
-        const maxR = n * n * 5; // Heuristic for range
+        const maxR = n * n * 5; // Heuristic for range in Bohr units
         const steps = 100;
+        const BOHR_TO_ANGSTROM = 0.529177;
 
         for (let i = 0; i <= steps; i++) {
-            const r = (i / steps) * maxR;
-            const R_nl = radialWaveFunction(n, l, r);
-            const P_r = r * r * R_nl * R_nl; // Radial probability density P(r) = r^2 |R(r)|^2
+            const rBohr = (i / steps) * maxR;
+            const R_nl = radialWaveFunction(n, l, rBohr);
+            const P_r = rBohr * rBohr * R_nl * R_nl;
 
             points.push({
-                r: r.toFixed(1),
+                r: rBohr * BOHR_TO_ANGSTROM, // Numerical in Angstroms
                 prob: P_r,
             });
         }
@@ -40,10 +42,12 @@ export const RadialChart: React.FC = () => {
                         stroke="#ffffff40"
                         fontSize={10}
                         tick={{ fill: '#ffffff60' }}
-                        label={{ value: 'Radius (a₀)', position: 'insideBottomRight', offset: 0, fill: '#ffffff40', fontSize: 10 }}
+                        tickFormatter={(val) => val.toFixed(1)}
+                        label={{ value: 'Radio (Å)', position: 'insideBottomRight', offset: 0, fill: '#ffffff40', fontSize: 10 }}
                     />
                     <YAxis hide />
                     <Tooltip
+                        labelFormatter={(val) => `Radio: ${val.toFixed(2)} Å`}
                         contentStyle={{ backgroundColor: '#111', border: '1px solid #333', borderRadius: '8px', fontSize: '10px' }}
                         itemStyle={{ color: '#4facfe' }}
                     />

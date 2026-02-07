@@ -1,8 +1,10 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { useOrbitalStore } from '../store/useOrbitalStore';
-import { waveFunction } from '../math/physics';
+import { waveFunction, realWaveFunction, hybridWaveFunction } from '../math/physics';
+import { Html } from '@react-three/drei';
 
+// ... (shaders remain unchanged)
 const vertexShader = `
   varying vec3 vOrigin;
   varying vec3 vDirection;
@@ -98,24 +100,28 @@ const fragmentShader = `
 `;
 
 export const OrbitalVolume: React.FC = () => {
-    const { n, l, m, quality, opacity, visualizationMode } = useOrbitalStore();
+    // Selectors
+    const n = useOrbitalStore(s => s.n);
+    const l = useOrbitalStore(s => s.l);
+    const m = useOrbitalStore(s => s.m);
+    const quality = useOrbitalStore(s => s.quality);
+    const opacity = useOrbitalStore(s => s.opacity);
+    const visualizationMode = useOrbitalStore(s => s.visualizationMode);
+    const orbitalType = useOrbitalStore(s => s.orbitalType);
+    const hybridType = useOrbitalStore(s => s.hybridType);
+    const hybridIndex = useOrbitalStore(s => s.hybridIndex);
+
     const meshRef = useRef<THREE.Mesh>(null);
 
-    // Generate 3D Texture
     const texture = useMemo(() => {
         const size = quality;
-        const data = new Float32Array(size * size * size * 4); // RGBA
-
-        // Dynamic range based on n: r_max ≈ n^2 + 10 or n*12 + 5.
-        // For n=3, 41. For n=5, 65.
-        const range = n * 12 + 5;
+        const data = new Float32Array(size * size * size * 4);
+        const range = orbitalType === 'hybrid' ? 10 : (n * 10 + 5);
 
         for (let z = 0; z < size; z++) {
             for (let y = 0; y < size; y++) {
                 for (let x = 0; x < size; x++) {
                     const i = (z * size * size + y * size + x) * 4;
-
-                    // Map grid index to physics space [-0.5, 0.5] -> [-range, range]
                     const px = ((x / (size - 1)) - 0.5) * 2 * range;
                     const py = ((y / (size - 1)) - 0.5) * 2 * range;
                     const pz = ((z / (size - 1)) - 0.5) * 2 * range;
@@ -124,11 +130,25 @@ export const OrbitalVolume: React.FC = () => {
                     const theta = Math.acos(Math.max(-1, Math.min(1, pz / (r + 0.00001))));
                     const phi = Math.atan2(py, px);
 
-                    const psi = waveFunction(n, l, m, r, theta, phi);
-                    const dens = psi.real * psi.real + psi.imag * psi.imag;
+                    let dens = 0;
+                    let phase = 0;
+
+                    if (orbitalType === 'complex') {
+                        const psi = waveFunction(n, l, m, r, theta, phi);
+                        dens = psi.real * psi.real + psi.imag * psi.imag;
+                        phase = psi.real >= 0 ? 1.0 : 0.0;
+                    } else if (orbitalType === 'real') {
+                        const val = realWaveFunction(n, l, m, r, theta, phi);
+                        dens = val * val;
+                        phase = val >= 0 ? 1.0 : 0.0;
+                    } else if (orbitalType === 'hybrid') {
+                        const val = hybridWaveFunction(hybridType, hybridIndex, r, theta, phi);
+                        dens = val * val;
+                        phase = val >= 0 ? 1.0 : 0.0;
+                    }
 
                     data[i] = dens;
-                    data[i + 1] = psi.real >= 0 ? 1.0 : 0.0; // Phase
+                    data[i + 1] = phase;
                     data[i + 2] = 0;
                     data[i + 3] = 1;
                 }
@@ -140,47 +160,67 @@ export const OrbitalVolume: React.FC = () => {
         tex.type = THREE.FloatType;
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
-        tex.unpackAlignment = 1;
         tex.needsUpdate = true;
         return tex;
-    }, [n, l, m, quality]);
+    }, [n, l, m, quality, orbitalType, hybridType, hybridIndex]);
 
-    const uniforms = useMemo(() => {
-        // High range boost: when range is larger, density is sampled in more sparse voxels.
-        // We'll normalize density by n^6 but also account for the volume.
-        const boost = Math.pow(n, 6) * 1000.0;
-
-        return {
-            uTexture: { value: texture },
-            uOpacity: { value: opacity },
-            uSteps: { value: quality * 2 },
-            uThreshold: { value: 0.015 / Math.pow(n, 2) }, // Dynamic threshold for isosurface
-            uMode: { value: visualizationMode === 'cloud' ? 0 : 1 },
-            uDensityBoost: { value: boost }
-        };
-    }, [texture, opacity, quality, visualizationMode, n]);
+    const uniforms = useMemo(() => ({
+        uTexture: { value: texture },
+        uOpacity: { value: opacity },
+        uSteps: { value: quality * 2 },
+        uThreshold: { value: 0.01 },
+        uMode: { value: 0 },
+        uDensityBoost: { value: 1.0 }
+    }), []);
 
     useEffect(() => {
         if (meshRef.current) {
             const mat = meshRef.current.material as THREE.ShaderMaterial;
+            mat.uniforms.uTexture.value = texture;
             mat.uniforms.uOpacity.value = opacity;
+            mat.uniforms.uSteps.value = quality * 2;
             mat.uniforms.uMode.value = visualizationMode === 'cloud' ? 0 : 1;
-            mat.uniforms.uDensityBoost.value = Math.pow(n, 6) * 1000.0;
-            mat.uniforms.uThreshold.value = 0.015 / Math.pow(n, 2);
+
+            const boost = Math.pow(n, 6) * (orbitalType === 'hybrid' ? 10.0 : 500.0);
+            const threshold = (orbitalType === 'hybrid' ? 0.4 : 0.015) / Math.pow(n, 2);
+
+            mat.uniforms.uDensityBoost.value = boost;
+            mat.uniforms.uThreshold.value = threshold;
         }
-    }, [opacity, visualizationMode, n]);
+    }, [texture, opacity, visualizationMode, n, orbitalType, quality]);
+
+    const sizeScalar = 12;
 
     return (
-        <mesh ref={meshRef} scale={[12, 12, 12]}>
-            <boxGeometry args={[1, 1, 1]} />
-            <shaderMaterial
-                vertexShader={vertexShader}
-                fragmentShader={fragmentShader}
-                uniforms={uniforms}
-                transparent={true}
-                side={THREE.FrontSide}
-            />
-        </mesh>
+        <group>
+            <mesh ref={meshRef} scale={[sizeScalar, sizeScalar, sizeScalar]}>
+                <boxGeometry args={[1, 1, 1]} />
+                <shaderMaterial
+                    vertexShader={vertexShader}
+                    fragmentShader={fragmentShader}
+                    uniforms={uniforms}
+                    transparent={true}
+                    depthWrite={false}
+                    side={THREE.DoubleSide}
+                />
+            </mesh>
+
+            {/* Axes Context */}
+            <primitive object={new THREE.AxesHelper(sizeScalar * 0.6)} />
+
+            {/* Axis Labels */}
+            <group scale={sizeScalar / 2}>
+                <Html position={[1.1, 0, 0]} center>
+                    <div className="text-blue-400 font-bold text-sm pointer-events-none select-none drop-shadow-lg">x</div>
+                </Html>
+                <Html position={[0, 1.1, 0]} center>
+                    <div className="text-red-400 font-bold text-sm pointer-events-none select-none drop-shadow-lg">y</div>
+                </Html>
+                <Html position={[0, 0, 1.1]} center>
+                    <div className="text-green-400 font-bold text-sm pointer-events-none select-none drop-shadow-lg">z</div>
+                </Html>
+            </group>
+        </group>
     );
 };
 

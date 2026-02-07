@@ -119,3 +119,57 @@ export function probabilityDensity(n: number, l: number, m: number, r: number, t
     const psi = waveFunction(n, l, m, r, theta, phi);
     return psi.real * psi.real + psi.imag * psi.imag;
 }
+
+// Real Wave Function (for chemical representation)
+// m > 0: px, dxz... (based on cosine portion)
+// m < 0: py, dxy... (based on sine portion)
+export function realWaveFunction(n: number, l: number, m: number, r: number, theta: number, phi: number): number {
+    const R = radialWaveFunction(n, l, r);
+    const absM = Math.abs(m);
+    const norm = Math.sqrt(((2 * l + 1) * factorial(l - absM)) / (4 * Math.PI * factorial(l + absM)));
+    const pLM = legendre(l, absM, Math.cos(theta));
+
+    if (m === 0) {
+        return R * norm * pLM;
+    }
+
+    const trig = m > 0 ? Math.cos(m * phi) : Math.sin(absM * phi);
+    const realNorm = Math.sqrt(2) * norm;
+    return R * realNorm * pLM * trig;
+}
+
+// Hybrid Wave Functions (sp, sp2, sp3)
+export function hybridWaveFunction(
+    type: 'sp' | 'sp2' | 'sp3',
+    index: number, // 0 to (count-1)
+    r: number,
+    theta: number,
+    phi: number
+): number {
+    const s = realWaveFunction(2, 0, 0, r, theta, phi); // 2s
+    const px = realWaveFunction(2, 1, 1, r, theta, phi); // 2px
+    const py = realWaveFunction(2, 1, -1, r, theta, phi); // 2py
+    const pz = realWaveFunction(2, 1, 0, r, theta, phi); // 2pz
+
+    if (type === 'sp') {
+        const sign = index === 0 ? 1 : -1;
+        return (1 / Math.sqrt(2)) * (s + sign * pz);
+    }
+
+    if (type === 'sp2') {
+        // Linear combinations in XY plane
+        if (index === 0) return (1 / Math.sqrt(3)) * s + (Math.sqrt(2 / 3)) * px;
+        if (index === 1) return (1 / Math.sqrt(3)) * s - (1 / Math.sqrt(6)) * px + (1 / Math.sqrt(2)) * py;
+        if (index === 2) return (1 / Math.sqrt(3)) * s - (1 / Math.sqrt(6)) * px - (1 / Math.sqrt(2)) * py;
+    }
+
+    if (type === 'sp3') {
+        // Tetrahedral combinations
+        if (index === 0) return 0.5 * (s + px + py + pz);
+        if (index === 1) return 0.5 * (s + px - py - pz);
+        if (index === 2) return 0.5 * (s - px + py - pz);
+        if (index === 3) return 0.5 * (s - px - py + pz);
+    }
+
+    return 0;
+}
